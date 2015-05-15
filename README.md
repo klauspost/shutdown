@@ -59,6 +59,8 @@ Next you can register functions to run when shutdown runs:
 ```
 As noted there are three stages. All functions in one stage are executed in parallel, but the package will wait for all functions in one stage to have finished before moving on to the next one.  So your code cannot rely on any particular order of execution inside a single stage, but you are guaranteed that the First stage is finished before any functions from stage two are executed.
 
+You can send a parameter to your function, which is delivered as an `interface{}`. This way you can re-use the same function for similar tasks. See `simple-func.go` in the examples folder.
+
 This example above uses functions that are called, but you can also request channels that are notified on shutdown. This allows you do have shutdown handling in blocked select statements like this:
 
 ```Go
