@@ -19,7 +19,7 @@ Package home: https://github.com/klauspost/shutdown
 
 # examples
 
-There are examples in the [examples folder](https://github.com/klauspost/shutdown/examples).
+There are examples in the [examples folder](https://github.com/klauspost/shutdown/tree/master/examples).
 
 # license
 
