@@ -152,16 +152,6 @@ func onFunc(prio int, fn ShutdownFn, i interface{}) Notifier {
 
 // onShutdown will request a shutdown notifier.
 func onShutdown(prio int) Notifier {
-	srM.RLock()
-	// If shutdown has already been requested,
-	// return a notifier that has already been triggered.
-	if shutdownRequested {
-		srM.RUnlock()
-		n := make(Notifier, 1)
-		n <- make(chan struct{})
-		return n
-	}
-	srM.RUnlock()
 	sqM.Lock()
 	n := make(Notifier, 1)
 	shutdownQueue[prio] = append(shutdownQueue[prio], n)
@@ -214,14 +204,13 @@ func Shutdown() {
 	}
 
 	sqM.Lock()
-	defer sqM.Unlock()
-	for stage, queue := range shutdownQueue {
-		n := len(queue)
-		if n == 0 {
+	for stage := 0; stage < 3; stage++ {
+		queue := shutdownQueue[stage]
+		if len(queue) == 0 {
 			continue
 		}
 		log.Println("Shutdown stage", stage+1)
-		wait := make([]chan struct{}, n)
+		wait := make([]chan struct{}, len(queue))
 
 		// Send notification to all waiting
 		for i := range queue {
@@ -235,6 +224,9 @@ func Shutdown() {
 			close(notifier.client)
 		}
 
+		// We don't lock while we are waiting for notifiers to return
+		sqM.Unlock()
+
 		// Wait for all to return, no more than the shutdown delay
 		timeout := time.After(to)
 		for i := range wait {
@@ -245,10 +237,12 @@ func Shutdown() {
 				break
 			}
 		}
+		sqM.Lock()
 	}
 	// Reset - mainly for tests.
 	shutdownQueue = [3][]Notifier{}
 	shutdownFnQueue = [3][]fnNotify{}
+	sqM.Unlock()
 }
 
 // Started returns true if shutdown has been started.

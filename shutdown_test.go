@@ -205,6 +205,52 @@ func TestOrder(t *testing.T) {
 	}
 }
 
+func TestRecursive(t *testing.T) {
+	reset()
+	defer close(startTimer(t))
+
+	if Started() {
+		t.Fatal("shutdown started unexpectedly")
+	}
+
+	t1 := First()
+	if Started() {
+		t.Fatal("shutdown started unexpectedly")
+	}
+
+	var ok1, ok2, ok3 bool
+	go func() {
+		for {
+			select {
+			case n := <-t1:
+				ok1 = true
+				t2 := Second()
+				close(n)
+				select {
+				case n := <-t2:
+					ok2 = true
+					t3 := Third()
+					close(n)
+					select {
+					case n := <-t3:
+						ok3 = true
+						close(n)
+						return
+					}
+				}
+			}
+		}
+	}()
+	if ok1 || ok2 || ok3 {
+		t.Fatal("shutdown has already happened", ok1, ok2, ok3)
+	}
+
+	Shutdown()
+	if !ok1 || !ok2 || !ok3 {
+		t.Fatal("did not get expected shutdown signal", ok1, ok2, ok3)
+	}
+}
+
 func TestBasicFn(t *testing.T) {
 	reset()
 	defer close(startTimer(t))
@@ -222,31 +268,27 @@ func TestBasicFn(t *testing.T) {
 	}
 }
 
+func setBool(i interface{}) {
+	set := i.(*bool)
+	*set = true
+}
+
 func TestFnOrder(t *testing.T) {
 	reset()
 	defer close(startTimer(t))
 
 	var ok1, ok2, ok3 bool
-	_ = ThirdFunc(func(i interface{}) {
-		set := i.(*bool)
-		*set = true
-	}, &ok3)
+	_ = ThirdFunc(setBool, &ok3)
 	if Started() {
 		t.Fatal("shutdown started unexpectedly")
 	}
 
-	_ = SecondFunc(func(i interface{}) {
-		set := i.(*bool)
-		*set = true
-	}, &ok2)
+	_ = SecondFunc(setBool, &ok2)
 	if Started() {
 		t.Fatal("shutdown started unexpectedly")
 	}
 
-	_ = FirstFunc(func(i interface{}) {
-		set := i.(*bool)
-		*set = true
-	}, &ok1)
+	_ = FirstFunc(setBool, &ok1)
 	if Started() {
 		t.Fatal("shutdown started unexpectedly")
 	}
@@ -258,6 +300,75 @@ func TestFnOrder(t *testing.T) {
 	Shutdown()
 
 	if !ok1 || !ok2 || !ok3 {
+		t.Fatal("did not get expected shutdown signal", ok1, ok2, ok3)
+	}
+}
+
+func TestFnRecursive(t *testing.T) {
+	reset()
+	defer close(startTimer(t))
+
+	var ok1, ok2, ok3 bool
+
+	_ = FirstFunc(func(i interface{}) {
+		set := i.(*bool)
+		*set = true
+		_ = SecondFunc(func(i interface{}) {
+			set := i.(*bool)
+			*set = true
+			_ = ThirdFunc(func(i interface{}) {
+				set := i.(*bool)
+				*set = true
+			}, &ok3)
+		}, &ok2)
+	}, &ok1)
+
+	if Started() {
+		t.Fatal("shutdown started unexpectedly")
+	}
+
+	if ok1 || ok2 || ok3 {
+		t.Fatal("shutdown has already happened", ok1, ok2, ok3)
+	}
+
+	Shutdown()
+
+	if !ok1 || !ok2 || !ok3 {
+		t.Fatal("did not get expected shutdown signal", ok1, ok2, ok3)
+	}
+}
+
+// When setting First or Second inside stage three they should be ignored.
+func TestFnRecursiveRev(t *testing.T) {
+	reset()
+	defer close(startTimer(t))
+
+	var ok1, ok2, ok3 bool
+
+	_ = ThirdFunc(func(i interface{}) {
+		set := i.(*bool)
+		*set = true
+		_ = SecondFunc(func(i interface{}) {
+			set := i.(*bool)
+			*set = true
+		}, &ok2)
+		_ = FirstFunc(func(i interface{}) {
+			set := i.(*bool)
+			*set = true
+		}, &ok1)
+	}, &ok3)
+
+	if Started() {
+		t.Fatal("shutdown started unexpectedly")
+	}
+
+	if ok1 || ok2 || ok3 {
+		t.Fatal("shutdown has already happened", ok1, ok2, ok3)
+	}
+
+	Shutdown()
+
+	if ok1 || ok2 || !ok3 {
 		t.Fatal("did not get expected shutdown signal", ok1, ok2, ok3)
 	}
 }
