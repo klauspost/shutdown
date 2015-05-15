@@ -73,6 +73,82 @@ func TestCancel(t *testing.T) {
 	}
 }
 
+func TestTimeout(t *testing.T) {
+	reset()
+	SetTimeout(time.Millisecond * 50)
+	defer close(startTimer(t))
+	f := First()
+	go func() {
+		select {
+		case <-f:
+		}
+	}()
+	tn := time.Now()
+	Shutdown()
+	dur := time.Now().Sub(tn)
+	if dur > time.Second || dur < time.Millisecond*50 {
+		t.Fatalf("timeout time was unexpected:%v", time.Now().Sub(tn))
+	}
+	if !Started() {
+		t.Fatal("got unexpected shutdown signal")
+	}
+}
+
+func TestLock(t *testing.T) {
+	reset()
+	defer close(startTimer(t))
+	f := First()
+	ok := false
+	go func() {
+		select {
+		case n := <-f:
+			ok = true
+			close(n)
+		}
+	}()
+	got := Lock()
+	if !got {
+		t.Fatal("Unable to aquire lock")
+	}
+	Unlock()
+	for i := 0; i < 10; i++ {
+		go func() {
+			if Lock() {
+				time.Sleep(time.Second)
+				Unlock()
+			}
+		}()
+	}
+	Shutdown()
+	if !ok {
+		t.Fatal("shutdown signal not received")
+	}
+	if !Started() {
+		t.Fatal("expected that shutdown had started")
+	}
+}
+
+func TestLockUnrelease(t *testing.T) {
+	reset()
+	defer close(startTimer(t))
+	SetTimeout(time.Millisecond * 50)
+	got := Lock()
+	if !got {
+		t.Fatal("Unable to aquire lock")
+	}
+	tn := time.Now()
+	Shutdown()
+	dur := time.Now().Sub(tn)
+	if dur > time.Second || dur < time.Millisecond*50 {
+		t.Fatalf("timeout time was unexpected:%v", time.Now().Sub(tn))
+	}
+	if !Started() {
+		t.Fatal("expected that shutdown had started")
+	}
+	// Unlock to be nice
+	Unlock()
+}
+
 func TestOrder(t *testing.T) {
 	reset()
 	defer close(startTimer(t))

@@ -193,11 +193,26 @@ func Exit(code int) {
 }
 
 // Shutdown will signal all notifiers in three stages.
+// It will first check that all locks have been released - see Lock()
 func Shutdown() {
 	srM.Lock()
 	shutdownRequested = true
 	to := timeout
 	srM.Unlock()
+
+	// Wait till all locks have been released or timeout has passed.
+	toInit := time.After(to)
+	var waitInit = make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(waitInit)
+	}()
+	select {
+	case <-waitInit:
+	case <-toInit:
+		log.Println("timeout waiting for locks to be released")
+	}
+
 	sqM.Lock()
 	defer sqM.Unlock()
 	for stage, queue := range shutdownQueue {
@@ -243,4 +258,32 @@ func Started() bool {
 	started := shutdownRequested
 	srM.RUnlock()
 	return started
+}
+
+var wg sync.WaitGroup
+
+// Lock will signal that you have a function running,
+// that you do not want to be interrupted by a shutdown.
+//
+// If the function returns false shutdown has already been initiated,
+// and you did not get a lock. You should therefore not call Unlock.
+//
+// If the function returned true, you must call Unlock() once to release the lock.
+//
+// You should not hold a lock when you start a shutdown.
+func Lock() bool {
+	srM.RLock()
+	s := shutdownRequested
+	if !s {
+		wg.Add(1)
+	}
+	srM.RUnlock()
+	return !s
+}
+
+// Unlock will release a shutdown lock.
+// This may only be called if you have previously called Lock and it has
+// returned true
+func Unlock() {
+	wg.Done()
 }
