@@ -5,8 +5,8 @@ This package helps you manage shutdown code centrally, and provides functionalit
 
 This will enable you to save data, notify other services that your application is shutting down.
 
-Package home: https://github.com/klauspost/shutdown
-Godoc: https://godoc.org/github.com/klauspost/shutdown
+* Package home: https://github.com/klauspost/shutdown
+* Godoc: https://godoc.org/github.com/klauspost/shutdown
 
 [![GoDoc][1]][2] [![Build Status][3]][4]
 
