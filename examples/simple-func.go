@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sync"
 	"syscall"
 )
 
@@ -20,20 +19,23 @@ import (
 //
 // To execute, use 'go run simple-func.go'
 
-var logFile *os.File
+// This is the function we would like to execute at shutdown.
+func closeFile(i interface{}) {
+	f := i.(*os.File)
+	log.Println("Closing", f.Name()+"...")
+	f.Close()
+}
 
 func main() {
 	// Make shutdown catch Ctrl+c and system terminate
 	shutdown.OnSignal(0, os.Interrupt, syscall.SIGTERM)
 
 	// Create a log file
+	var logFile *os.File
 	logFile, _ = os.Create("log.txt")
 
 	// When shutdown is initiated, close the file
-	shutdown.FirstFunc(func(interface{}) {
-		log.Println("Closing log...")
-		logFile.Close()
-	}, nil)
+	shutdown.FirstFunc(closeFile, logFile)
 
 	// Start a webserver
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
