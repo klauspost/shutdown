@@ -120,6 +120,7 @@ Also there are some things to be mindful of:
 * Timeout cannot be changed once shutdown has been initiated. It will remain what it was when shutdown was started.
 * Notifiers returned from a function (eg. FirstFunc) can be used for selects. They will be notified, but the shutdown manager will not wait for them to finish, so using them for this is not recommended.
 * If a panic occurs inside a shutdown function call in your code, the panic will be recovered and **ignored** and the shutdown will proceed. A message is printed to `log`. If you want to handle panics, you must do it in your code.
+* When shutdown is initiated, it cannot be stopped.
 
 When you design with this do take care that this library is for **controlled** shutdown of your application. If you application crashes no shutdown handlers are run, so panics will still be fatal. You can of course still call the `Shutdown()` function if you recover a panic, but the library does nothing like this automatically.
 
