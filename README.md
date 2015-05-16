@@ -42,7 +42,7 @@ If you don't like the default timeout duration of 5 seconds, you can change it b
 ```Go
   shutdown.SetTimeout(time.Second * 1)
 ```
-Now the maximum delay for shutdown is **4 seconds**. The timeout is applied to each of the stages and that is also the maximum time to wait for the shutdown to begin.
+Now the maximum delay for shutdown is **4 seconds**. The timeout is applied to each of the stages and that is also the maximum time to wait for the shutdown to begin. If you need to adjust a single stage, use `SetTimeoutN` function.
 
 Next you can register functions to run when shutdown runs:
 ```Go
@@ -117,7 +117,7 @@ Finally you can call `shutdown.Exit(exitcode)` to call all exit handlers and exi
 
 Also there are some things to be mindful of:
 * Notifiers **can** be created inside shutdown code, but only for stages **following** the current. So stage 1 notifiers can create stage 2 notifiers, but if they create a stage 1 notifier this will never be called.
-* Timeout cannot be changed once shutdown has been initiated. It will remain what it was when shutdown was started.
+* Timeout can be changed once shutdown has been initiated, but it will only affect the **following** stages.
 * Notifiers returned from a function (eg. FirstFunc) can be used for selects. They will be notified, but the shutdown manager will not wait for them to finish, so using them for this is not recommended.
 * If a panic occurs inside a shutdown function call in your code, the panic will be recovered and **ignored** and the shutdown will proceed. A message is printed to `log`. If you want to handle panics, you must do it in your code.
 * When shutdown is initiated, it cannot be stopped.

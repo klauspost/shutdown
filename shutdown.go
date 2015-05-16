@@ -34,13 +34,28 @@ var shutdownFnQueue [3][]fnNotify
 
 var srM sync.RWMutex // Mutex for below
 var shutdownRequested = false
-var timeout = 5 * time.Second
+var timeouts = [4]time.Duration{5 * time.Second, 5 * time.Second, 5 * time.Second, 5 * time.Second}
 
-// The maximum delay to wait for each stage to finish.
+// SetTimeout sets maximum delay to wait for each stage to finish.
 // When the timeout has expired for a stage the next stage will be initiated.
 func SetTimeout(d time.Duration) {
 	srM.Lock()
-	timeout = d
+	for i := range timeouts {
+		timeouts[i] = d
+	}
+	srM.Unlock()
+}
+
+// SetTimeoutN set maximum delay to wait for a specific stage to finish.
+// When the timeout expired for a stage the next stage will be initiated.
+// Stage numbers are 0 = pre-shutdown (wait for locks), 1,2,3 = set timeout for that stage.
+// Other values will cause a panic.
+func SetTimeoutN(stage int, d time.Duration) {
+	if stage < 0 || stage > 3 {
+		panic("invalid stage specified")
+	}
+	srM.Lock()
+	timeouts[stage] = d
 	srM.Unlock()
 }
 
@@ -187,7 +202,7 @@ func Exit(code int) {
 func Shutdown() {
 	srM.Lock()
 	shutdownRequested = true
-	to := timeout
+	to := timeouts[0]
 	srM.Unlock()
 
 	// Wait till all locks have been released or timeout has passed.
@@ -205,6 +220,10 @@ func Shutdown() {
 
 	sqM.Lock()
 	for stage := 0; stage < 3; stage++ {
+		srM.Lock()
+		to = timeouts[stage+1]
+		srM.Unlock()
+
 		queue := shutdownQueue[stage]
 		if len(queue) == 0 {
 			continue

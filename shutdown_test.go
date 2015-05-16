@@ -2,6 +2,7 @@ package shutdown
 
 import (
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 )
@@ -19,7 +20,13 @@ func startTimer(t *testing.T) chan struct{} {
 	finished := make(chan struct{}, 0)
 	go func() {
 		srM.RLock()
-		timeout := time.After(timeout * 4)
+		var to time.Duration
+		for i := range timeouts {
+			to += timeouts[i]
+		}
+		// Add some extra time.
+		timeout := time.After((to * 10) / 9)
+
 		srM.RUnlock()
 		select {
 		case <-timeout:
@@ -508,5 +515,20 @@ func ExampleShutdownFn() {
 	}, "Example parameter")
 
 	// Will print the parameter when Shutdown() is called
+}
 
+//
+func ExampleLock() {
+	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		// Get a lock while we have the lock, the server will not shut down.
+		if Lock() {
+			defer Unlock()
+		} else {
+			// We are currently shutting down, return http.StatusServiceUnavailable
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		// ...
+	})
+	http.ListenAndServe(":8080", nil)
 }
