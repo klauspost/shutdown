@@ -98,15 +98,14 @@ The final thing you can do is to lock shutdown in parts of your code you do not 
 A simple example can be seen in this http handler:
 ```Go
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-	  // Acquire a lock. While this is held server will not shut down (except after timeout)
+	  // Acquire a lock. 
+	  // While this is held server will not shut down (except after timeout)
 		if shutdown.Lock() {
 			defer shutdown.Unlock()
 			io.WriteString(w, "Server running")
 		} else {
 		  // Shutdown has started, return that the service is unavailable
 		  w.WriteHeader(http.StatusServiceUnavailable)
-		  w.Write([]byte("Server is now shutting down"))
-		  return
 		}
 	})
 ```
