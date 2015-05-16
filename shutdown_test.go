@@ -75,7 +75,7 @@ func TestCancel(t *testing.T) {
 
 func TestTimeout(t *testing.T) {
 	reset()
-	SetTimeout(time.Millisecond * 50)
+	SetTimeout(time.Millisecond * 100)
 	defer close(startTimer(t))
 	f := First()
 	go func() {
@@ -131,7 +131,7 @@ func TestLock(t *testing.T) {
 func TestLockUnrelease(t *testing.T) {
 	reset()
 	defer close(startTimer(t))
-	SetTimeout(time.Millisecond * 50)
+	SetTimeout(time.Millisecond * 100)
 	got := Lock()
 	if !got {
 		t.Fatal("Unable to aquire lock")
