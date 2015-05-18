@@ -17,6 +17,16 @@ import (
 	"time"
 )
 
+// Valid values for this is exported as variables.
+type Stage struct {
+	n int
+}
+
+var Preshutdown = Stage{0} // Indicates stage when waiting for locks to be released.
+var Stage1 = Stage{1}      // Indicates first stage of timeouts.
+var Stage2 = Stage{2}      // Indicates second stage of timeouts.
+var Stage3 = Stage{3}      // Indicates third stage of timeouts.
+
 // Notifier is a channel, that will be sent a channel
 // once the application shuts down.
 // When you have performed your shutdown actions close the channel you are given.
@@ -48,14 +58,10 @@ func SetTimeout(d time.Duration) {
 
 // SetTimeoutN set maximum delay to wait for a specific stage to finish.
 // When the timeout expired for a stage the next stage will be initiated.
-// Stage numbers are 0 = pre-shutdown (wait for locks), 1,2,3 = set timeout for that stage.
-// Other values will cause a panic.
-func SetTimeoutN(stage int, d time.Duration) {
-	if stage < 0 || stage > 3 {
-		panic("invalid stage specified")
-	}
+// The stage can be obtained by using the exported variables called 'Stage1, etc.
+func SetTimeoutN(s Stage, d time.Duration) {
 	srM.Lock()
-	timeouts[stage] = d
+	timeouts[s.n] = d
 	srM.Unlock()
 }
 

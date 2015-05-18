@@ -101,6 +101,50 @@ func TestTimeout(t *testing.T) {
 	}
 }
 
+func TestTimeoutN(t *testing.T) {
+	reset()
+	SetTimeout(time.Second * 2)
+	SetTimeoutN(Stage1, time.Millisecond*100)
+	defer close(startTimer(t))
+	f := First()
+	go func() {
+		select {
+		case <-f:
+		}
+	}()
+	tn := time.Now()
+	Shutdown()
+	dur := time.Now().Sub(tn)
+	if dur > time.Second || dur < time.Millisecond*50 {
+		t.Fatalf("timeout time was unexpected:%v", time.Now().Sub(tn))
+	}
+	if !Started() {
+		t.Fatal("got unexpected shutdown signal")
+	}
+}
+
+func TestTimeoutN2(t *testing.T) {
+	reset()
+	SetTimeout(time.Millisecond * 100)
+	SetTimeoutN(Stage2, time.Second*2)
+	defer close(startTimer(t))
+	f := First()
+	go func() {
+		select {
+		case <-f:
+		}
+	}()
+	tn := time.Now()
+	Shutdown()
+	dur := time.Now().Sub(tn)
+	if dur > time.Second || dur < time.Millisecond*50 {
+		t.Fatalf("timeout time was unexpected:%v", time.Now().Sub(tn))
+	}
+	if !Started() {
+		t.Fatal("got unexpected shutdown signal")
+	}
+}
+
 func TestLock(t *testing.T) {
 	reset()
 	defer close(startTimer(t))
@@ -531,4 +575,13 @@ func ExampleLock() {
 		// ...
 	})
 	http.ListenAndServe(":8080", nil)
+}
+
+// Change timeout for a single stage
+func ExampleSetTimeoutN() {
+	// Set timout for all stages
+	SetTimeout(time.Second)
+
+	// But give second stage more time
+	SetTimeoutN(Stage2, time.Second*10)
 }
