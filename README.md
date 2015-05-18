@@ -1,7 +1,7 @@
 # shutdown
 Shutdown management library for Go
 
-This package helps you manage shutdown code centrally, and provides functionality to execute code when shutdown occurs.
+This package helps you manage shutdown code centrally, and provides functionality to execute code when a controlled shutdown occurs.
 
 This will enable you to save data, notify other services that your application is shutting down.
 
@@ -16,10 +16,10 @@ This will enable you to save data, notify other services that your application i
 [4]: https://travis-ci.org/klauspost/shutdown
 
 # concept
-Managing shutdowns can be very tricky, often leading to races, crashes and strange behaviour.
+Managing shutdowns can be very tricky, often leading to races, crashes and strange behavior.
 This package will help you manage the shutdown process and will attempt to fix some of the common problems when dealing with shutting down.
 
-The shutdown package allow you to block shutdown while certain parts of your code is running. This is helpful to ensure that operations are not interupted.
+The shutdown package allow you to block shutdown while certain parts of your code is running. This is helpful to ensure that operations are not interrupted.
 
 The second part of the shutdown process is notifying goroutines in a select loop and calling functions in your code that handles various shutdown procedures, like closing databases, notifying other servers, deleting temporary files, etc.
 
