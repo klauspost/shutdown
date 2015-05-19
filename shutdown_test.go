@@ -18,19 +18,19 @@ func reset() {
 
 func startTimer(t *testing.T) chan struct{} {
 	finished := make(chan struct{}, 0)
+	srM.RLock()
+	var to time.Duration
+	for i := range timeouts {
+		to += timeouts[i]
+	}
+	srM.RUnlock()
+	// Add some extra time.
+	toc := time.After((to * 10) / 9)
 	go func() {
-		srM.RLock()
-		var to time.Duration
-		for i := range timeouts {
-			to += timeouts[i]
-		}
-		// Add some extra time.
-		timeout := time.After((to * 10) / 9)
-
-		srM.RUnlock()
 		select {
-		case <-timeout:
-			t.Fatal("timeout while running test")
+		case <-toc:
+			panic("timeout while running test")
+			return
 		case <-finished:
 			return
 
@@ -58,7 +58,35 @@ func TestBasic(t *testing.T) {
 	if !Started() {
 		t.Fatal("shutdown not marked started")
 	}
+}
 
+func TestPreShutdown(t *testing.T) {
+	reset()
+	defer close(startTimer(t))
+	f := PreShutdown()
+	ok := false
+	Lock()
+	go func() {
+		select {
+		case n := <-f:
+			ok = true
+			Unlock()
+			close(n)
+		}
+	}()
+	tn := time.Now()
+	Shutdown()
+	dur := time.Now().Sub(tn)
+	if dur > time.Second {
+		t.Fatalf("timeout time was hit unexpected:%v", time.Now().Sub(tn))
+	}
+
+	if !ok {
+		t.Fatal("did not get expected shutdown signal")
+	}
+	if !Started() {
+		t.Fatal("shutdown not marked started")
+	}
 }
 
 func TestCancel(t *testing.T) {
@@ -219,26 +247,37 @@ func TestOrder(t *testing.T) {
 		t.Fatal("shutdown started unexpectedly")
 	}
 
-	var ok1, ok2, ok3 bool
+	t0 := PreShutdown()
+	if Started() {
+		t.Fatal("shutdown started unexpectedly")
+	}
+
+	var ok0, ok1, ok2, ok3 bool
 	go func() {
 		for {
 			select {
-			//t1 must be first
+			//t0 must be first
+			case n := <-t0:
+				if ok0 || ok1 || ok2 || ok3 {
+					t.Fatal("unexpected order", ok0, ok1, ok2, ok3)
+				}
+				ok0 = true
+				close(n)
 			case n := <-t1:
-				if ok1 || ok2 || ok3 {
-					t.Fatal("unexpected order", ok1, ok2, ok3)
+				if !ok0 || ok1 || ok2 || ok3 {
+					t.Fatal("unexpected order", ok0, ok1, ok2, ok3)
 				}
 				ok1 = true
 				close(n)
 			case n := <-t2:
-				if !ok1 || ok2 || ok3 {
-					t.Fatal("unexpected order", ok1, ok2, ok3)
+				if !ok0 || !ok1 || ok2 || ok3 {
+					t.Fatal("unexpected order", ok0, ok1, ok2, ok3)
 				}
 				ok2 = true
 				close(n)
 			case n := <-t3:
-				if !ok1 || !ok2 || ok3 {
-					t.Fatal("unexpected order", ok1, ok2, ok3)
+				if !ok0 || !ok1 || !ok2 || ok3 {
+					t.Fatal("unexpected order", ok0, ok1, ok2, ok3)
 				}
 				ok3 = true
 				close(n)
@@ -246,13 +285,13 @@ func TestOrder(t *testing.T) {
 			}
 		}
 	}()
-	if ok1 || ok2 || ok3 {
-		t.Fatal("shutdown has already happened", ok1, ok2, ok3)
+	if ok0 || ok1 || ok2 || ok3 {
+		t.Fatal("shutdown has already happened", ok0, ok1, ok2, ok3)
 	}
 
 	Shutdown()
-	if !ok1 || !ok2 || !ok3 {
-		t.Fatal("did not get expected shutdown signal", ok1, ok2, ok3)
+	if !ok0 || !ok1 || !ok2 || !ok3 {
+		t.Fatal("did not get expected shutdown signal", ok0, ok1, ok2, ok3)
 	}
 }
 
@@ -427,19 +466,31 @@ func TestFnRecursiveRev(t *testing.T) {
 func TestFnCancel(t *testing.T) {
 	reset()
 	defer close(startTimer(t))
-	gotcall := false
+	var g0, g1, g2, g3 bool
 
 	// Register a function
-	not := FirstFunc(func(i interface{}) {
-		gotcall = i.(bool)
+	notp := PreShutdownFunc(func(i interface{}) {
+		g0 = i.(bool)
+	}, true)
+	not1 := FirstFunc(func(i interface{}) {
+		g1 = i.(bool)
+	}, true)
+	not2 := SecondFunc(func(i interface{}) {
+		g2 = i.(bool)
+	}, true)
+	not3 := ThirdFunc(func(i interface{}) {
+		g3 = i.(bool)
 	}, true)
 
-	not.Cancel()
+	notp.Cancel()
+	not1.Cancel()
+	not2.Cancel()
+	not3.Cancel()
 
 	// Start shutdown
 	Shutdown()
-	if gotcall {
-		t.Fatal("got unexpected shutdown signal")
+	if g1 || g2 || g3 || g0 {
+		t.Fatal("got unexpected shutdown signal", g0, g1, g2, g3)
 	}
 }
 

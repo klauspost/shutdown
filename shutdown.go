@@ -39,8 +39,8 @@ type fnNotify struct {
 }
 
 var sqM sync.Mutex // Mutex for below
-var shutdownQueue [3][]Notifier
-var shutdownFnQueue [3][]fnNotify
+var shutdownQueue [4][]Notifier
+var shutdownFnQueue [4][]fnNotify
 
 var srM sync.RWMutex // Mutex for below
 var shutdownRequested = false
@@ -80,7 +80,7 @@ func (s *Notifier) Cancel() {
 	var a chan chan struct{}
 	var b chan chan struct{}
 	a = *s
-	for n := 0; n < 3; n++ {
+	for n := 0; n < len(shutdownQueue); n++ {
 		for i := range shutdownQueue[n] {
 			b = shutdownQueue[n][i]
 			if a == b {
@@ -107,37 +107,51 @@ func (s *Notifier) Cancel() {
 	sqM.Unlock()
 }
 
-// First returns a notifier that will be called in the first stage of shutdowns
-func First() Notifier {
+// PreShutdown will return a Notifier that will be fired as soon as the shutdown
+// is signalled, before locks are released.
+// This allows to for instance send signals to upstream servers not to send more requests.
+func PreShutdown() Notifier {
 	return onShutdown(0)
 }
 
 type ShutdownFn func(interface{})
 
+// PreShutdownFunc registers a function that will be called as soon as the shutdown
+// is signalled, before locks are released.
+// This allows to for instance send signals to upstream servers not to send more requests.
+func PreShutdownFunc(fn ShutdownFn, v interface{}) Notifier {
+	return onFunc(0, fn, v)
+}
+
+// First returns a notifier that will be called in the first stage of shutdowns
+func First() Notifier {
+	return onShutdown(1)
+}
+
 // FirstFunc executes a function in the first stage of the shutdown
 func FirstFunc(fn ShutdownFn, v interface{}) Notifier {
-	return onFunc(0, fn, v)
+	return onFunc(1, fn, v)
 }
 
 // Second returns a notifier that will be called in the second stage of shutdowns
 func Second() Notifier {
-	return onShutdown(1)
+	return onShutdown(2)
 }
 
 // SecondFunc executes a function in the second stage of the shutdown
 func SecondFunc(fn ShutdownFn, v interface{}) Notifier {
-	return onFunc(1, fn, v)
+	return onFunc(2, fn, v)
 }
 
 // Third returns a notifier that will be called in the third stage of shutdowns
 func Third() Notifier {
-	return onShutdown(2)
+	return onShutdown(3)
 }
 
 // ThirdFunc executes a function in the third stage of the shutdown
 // The returned Notifier is only really useful for cancelling the shutdown function
 func ThirdFunc(fn ShutdownFn, v interface{}) Notifier {
-	return onFunc(2, fn, v)
+	return onFunc(3, fn, v)
 }
 
 // Create a function notifier.
@@ -208,33 +222,28 @@ func Exit(code int) {
 func Shutdown() {
 	srM.Lock()
 	shutdownRequested = true
-	to := timeouts[0]
 	srM.Unlock()
 
-	// Wait till all locks have been released or timeout has passed.
-	toInit := time.After(to)
-	var waitInit = make(chan struct{})
-	go func() {
+	// Add a pre-shutdown function that waits for all locks to be released.
+	PreShutdownFunc(func(interface{}) {
 		wg.Wait()
-		close(waitInit)
-	}()
-	select {
-	case <-waitInit:
-	case <-toInit:
-		log.Println("timeout waiting for locks to be released")
-	}
+	}, nil)
 
 	sqM.Lock()
-	for stage := 0; stage < 3; stage++ {
+	for stage := 0; stage < 4; stage++ {
 		srM.Lock()
-		to = timeouts[stage+1]
+		to := timeouts[stage]
 		srM.Unlock()
 
 		queue := shutdownQueue[stage]
 		if len(queue) == 0 {
 			continue
 		}
-		log.Println("Shutdown stage", stage+1)
+		if stage == 0 {
+			log.Println("Initiating shutdown")
+		} else {
+			log.Println("Shutdown stage", stage)
+		}
 		wait := make([]chan struct{}, len(queue))
 
 		// Send notification to all waiting
@@ -254,6 +263,7 @@ func Shutdown() {
 
 		// Wait for all to return, no more than the shutdown delay
 		timeout := time.After(to)
+
 		for i := range wait {
 			select {
 			case <-wait[i]:
@@ -265,8 +275,8 @@ func Shutdown() {
 		sqM.Lock()
 	}
 	// Reset - mainly for tests.
-	shutdownQueue = [3][]Notifier{}
-	shutdownFnQueue = [3][]fnNotify{}
+	shutdownQueue = [4][]Notifier{}
+	shutdownFnQueue = [4][]fnNotify{}
 	sqM.Unlock()
 }
 
