@@ -123,6 +123,18 @@ Also there are some things to be mindful of:
 
 When you design with this do take care that this library is for **controlled** shutdown of your application. If you application crashes no shutdown handlers are run, so panics will still be fatal. You can of course still call the `Shutdown()` function if you recover a panic, but the library does nothing like this automatically.
 
+# why 3 stages?
+By limiting the design to "only" three stages enable you to clearly make design choices, and force you to run as many things as possible in parallel. With this you can write simple design docs. Lets look at a webserver example:
+
+* Preshutdown: Finish accepted requests, refuse new ones.
+* Stage 1: Notify clients, flush data to database, notify upstream servers we are offline.
+* Stage 2: Flush database bulk writers, messages, close databases. (no database writes)
+* Stage 3: Flush/close log/metrics writer. (no log writes)
+
+My intention is that this makes the shutdown process easier to manage, and encourage more concurrency, because you don't create a long daisy-chain of events, and doesn't force you to look through all your code to insert a single event correctly.
+
+Don't think of the 3-stages as something that must do all stages of your shutdown. A single function call can of course (and is intended to) contain several "substages". Shutting down the database can easily be several stages, but you only register a single stage in the shutdown manager. The important part is that nothing else in the same stage can use the database.
+
 # examples
 
 There are examples in the [examples folder](https://github.com/klauspost/shutdown/tree/master/examples).
