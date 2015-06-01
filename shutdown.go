@@ -22,6 +22,10 @@ type Stage struct {
 	n int
 }
 
+// Logger used for output.
+// This can be exchanged with your own.
+var Logger = log.New(os.Stderr, "[shutdown]: ", log.LstdFlags)
+
 var Preshutdown = Stage{0} // Indicates stage when waiting for locks to be released.
 var Stage1 = Stage{1}      // Indicates first stage of timeouts.
 var Stage2 = Stage{2}      // Indicates second stage of timeouts.
@@ -169,7 +173,7 @@ func onFunc(prio int, fn ShutdownFn, i interface{}) Notifier {
 			{
 				defer func() {
 					if r := recover(); r != nil {
-						log.Println("Panic in shutdown function:", r)
+						Logger.Println("Panic in shutdown function:", r)
 					}
 					if c != nil {
 						close(c)
@@ -240,9 +244,9 @@ func Shutdown() {
 			continue
 		}
 		if stage == 0 {
-			log.Println("Initiating shutdown")
+			Logger.Println("Initiating shutdown")
 		} else {
-			log.Println("Shutdown stage", stage)
+			Logger.Println("Shutdown stage", stage)
 		}
 		wait := make([]chan struct{}, len(queue))
 
@@ -268,7 +272,7 @@ func Shutdown() {
 			select {
 			case <-wait[i]:
 			case <-timeout:
-				log.Println("timeout waiting to shutdown, forcing shutdown")
+				Logger.Println("timeout waiting to shutdown, forcing shutdown")
 				break
 			}
 		}
