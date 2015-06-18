@@ -230,7 +230,10 @@ func Shutdown() {
 
 	// Add a pre-shutdown function that waits for all locks to be released.
 	PreShutdownFunc(func(interface{}) {
-		wg.Wait()
+		srM.Lock()
+		wait := wg
+		srM.Unlock()
+		wait.Wait()
 	}, nil)
 
 	sqM.Lock()
@@ -293,7 +296,11 @@ func Started() bool {
 	return started
 }
 
-var wg sync.WaitGroup
+var wg *sync.WaitGroup
+
+func init() {
+	wg = &sync.WaitGroup{}
+}
 
 // Lock will signal that you have a function running,
 // that you do not want to be interrupted by a shutdown.

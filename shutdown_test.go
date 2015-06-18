@@ -1,8 +1,11 @@
+// Copyright (c) 2015 Klaus Post, released under MIT License. See LICENSE file.
+
 package shutdown
 
 import (
 	"fmt"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 )
@@ -14,6 +17,9 @@ func reset() {
 	srM.Lock()
 	defer srM.Unlock()
 	shutdownRequested = false
+	wg = &sync.WaitGroup{}
+	shutdownQueue = [4][]Notifier{}
+	shutdownFnQueue = [4][]fnNotify{}
 }
 
 func startTimer(t *testing.T) chan struct{} {
@@ -29,7 +35,7 @@ func startTimer(t *testing.T) chan struct{} {
 	go func() {
 		select {
 		case <-toc:
-			panic("timeout while running test")
+			panic("unexpected timeout while running test")
 			return
 		case <-finished:
 			return
@@ -612,7 +618,8 @@ func ExampleShutdownFn() {
 	// Will print the parameter when Shutdown() is called
 }
 
-//
+// Note that the same effect of this example can also be achieved using the
+// WrapHandlerFunc helper.
 func ExampleLock() {
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		// Get a lock while we have the lock, the server will not shut down.
