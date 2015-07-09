@@ -20,6 +20,7 @@ func reset() {
 	wg = &sync.WaitGroup{}
 	shutdownQueue = [4][]Notifier{}
 	shutdownFnQueue = [4][]fnNotify{}
+	shutdownFinished = make(chan struct{})
 }
 
 func startTimer(t *testing.T) chan struct{} {
@@ -64,6 +65,10 @@ func TestBasic(t *testing.T) {
 	if !Started() {
 		t.Fatal("shutdown not marked started")
 	}
+	// Should just return at once.
+	Shutdown()
+	// Should also return at once.
+	Wait()
 }
 
 func TestPreShutdown(t *testing.T) {
@@ -112,6 +117,29 @@ func TestCancel(t *testing.T) {
 	if ok {
 		t.Fatal("got unexpected shutdown signal")
 	}
+}
+
+func TestWait(t *testing.T) {
+	reset()
+	defer close(startTimer(t))
+	ok := make(chan bool)
+	go func() {
+		Wait()
+		close(ok)
+	}()
+	// Wait a little - enough to fail very often.
+	time.Sleep(time.Millisecond * 10)
+
+	select {
+	case <-ok:
+		t.Fatal("Wait returned before shutdown finished")
+	default:
+	}
+
+	Shutdown()
+
+	// ok should return, otherwise we wait for timeout, which will fail the test
+	<-ok
 }
 
 func TestTimeout(t *testing.T) {
@@ -642,4 +670,46 @@ func ExampleSetTimeoutN() {
 
 	// But give second stage more time
 	SetTimeoutN(Stage2, time.Second*10)
+}
+
+// This is an example, that could be your main function.
+//
+// We wait for jobs to finish in another goroutine, from
+// where we initialize the shutdown.
+//
+// This is of course not a real-world problem, but there are many
+// cases where you would want to initialize shutdown from other places than
+// your main function, and where you would still like it to be able to
+// do some final cleanup.
+func ExampleWait() {
+	x := make([]struct{}, 10)
+	var wg sync.WaitGroup
+
+	wg.Add(len(x))
+	for i := range x {
+		go func(i int) {
+			time.Sleep(time.Millisecond * time.Duration(i))
+			wg.Done()
+		}(i)
+	}
+
+	// ignore this reset, for test purposes only
+	reset()
+
+	// Wait for the jobs above to finish
+	go func() {
+		wg.Wait()
+		fmt.Println("jobs done")
+		Shutdown()
+	}()
+
+	// Since this is main, we wait for a shutdown to occur before
+	// exiting.
+	Wait()
+	fmt.Println("exiting main")
+
+	// Note than the output will always be in this order.
+
+	// Output: jobs done
+	// exiting main
 }

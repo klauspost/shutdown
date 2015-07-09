@@ -45,6 +45,7 @@ type fnNotify struct {
 var sqM sync.Mutex // Mutex for below
 var shutdownQueue [4][]Notifier
 var shutdownFnQueue [4][]fnNotify
+var shutdownFinished = make(chan struct{}, 0) // Closed when shutdown has finished
 
 var srM sync.RWMutex // Mutex for below
 var shutdownRequested = false
@@ -225,6 +226,12 @@ func Exit(code int) {
 // It will first check that all locks have been released - see Lock()
 func Shutdown() {
 	srM.Lock()
+	if shutdownRequested {
+		srM.Unlock()
+		// Wait till shutdown finished
+		<-shutdownFinished
+		return
+	}
 	shutdownRequested = true
 	srM.Unlock()
 
@@ -284,6 +291,7 @@ func Shutdown() {
 	// Reset - mainly for tests.
 	shutdownQueue = [4][]Notifier{}
 	shutdownFnQueue = [4][]fnNotify{}
+	close(shutdownFinished)
 	sqM.Unlock()
 }
 
@@ -300,6 +308,14 @@ var wg *sync.WaitGroup
 
 func init() {
 	wg = &sync.WaitGroup{}
+}
+
+// Wait will wait until shutdown has finished.
+// This can be used to keep a main function from exiting
+// until shutdown has been called, either by a goroutine
+// or a signal.
+func Wait() {
+	<-shutdownFinished
 }
 
 // Lock will signal that you have a function running,
