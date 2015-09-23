@@ -119,6 +119,37 @@ func TestCancel(t *testing.T) {
 	}
 }
 
+func TestCancel2(t *testing.T) {
+	reset()
+	defer close(startTimer(t))
+	f2 := First()
+	f := First()
+	var ok, ok2 bool
+
+	go func() {
+		select {
+		case n := <-f:
+			ok = true
+			close(n)
+		}
+	}()
+	go func() {
+		select {
+		case n := <-f2:
+			ok2 = true
+			close(n)
+		}
+	}()
+	f.Cancel()
+	Shutdown()
+	if ok {
+		t.Fatal("got unexpected shutdown signal")
+	}
+	if !ok2 {
+		t.Fatal("missing shutdown signal")
+	}
+}
+
 func TestWait(t *testing.T) {
 	reset()
 	defer close(startTimer(t))

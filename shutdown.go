@@ -85,9 +85,9 @@ func (s *Notifier) Cancel() {
 	var a chan chan struct{}
 	var b chan chan struct{}
 	a = *s
-	for n := 0; n < len(shutdownQueue); n++ {
-		for i := range shutdownQueue[n] {
-			b = shutdownQueue[n][i]
+	for n, sdq := range shutdownQueue {
+		for i, qi := range sdq {
+			b = qi
 			if a == b {
 				shutdownQueue[n] = append(shutdownQueue[n][:i], shutdownQueue[n][i+1:]...)
 			}
@@ -278,12 +278,13 @@ func Shutdown() {
 		// Wait for all to return, no more than the shutdown delay
 		timeout := time.After(to)
 
+	brwait:
 		for i := range wait {
 			select {
 			case <-wait[i]:
 			case <-timeout:
 				Logger.Println("timeout waiting to shutdown, forcing shutdown")
-				break
+				break brwait
 			}
 		}
 		sqM.Lock()
