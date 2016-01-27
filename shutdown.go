@@ -7,6 +7,15 @@
 // See more information about the how to use it in the README.md file
 //
 // Package home: https://github.com/klauspost/shutdown
+//
+// This package has been updated to a new version. If you are starting a new project, use the new package:
+//
+// * Package home: https://github.com/klauspost/shutdown2
+// * Godoc: https://godoc.org/github.com/klauspost/shutdown2
+//
+// Version 2 mainly contains minor adjustments to the API to make it a bit easier to use.
+//
+// This package remains here to maintain compatibility.
 package shutdown
 
 import (
